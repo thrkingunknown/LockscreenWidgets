@@ -57,7 +57,7 @@ jobs:
         if: ${{ needs.build.outputs.app_version != steps.last_tag.outputs.tag }}
         uses: ncipollo/release-action@v1
         with:
-          name: 'WiFi List ${{needs.build.outputs.app_version}}'
+          name: 'LockScreen Widgets ${{needs.build.outputs.app_version}}'
           tag: '${{needs.build.outputs.app_version}}'
           generateReleaseNotes: true
           makeLatest: true
