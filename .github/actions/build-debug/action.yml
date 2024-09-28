@@ -1,89 +1,22 @@
 name: Build (debug)
 description: Builds debugging android apk
-inputs:
-  KEYSTORE_BASE_64:
-    description: 'secrets.KEYSTORE_BASE_64'
-    required: false
-  RELEASE_KEYSTORE_ALIAS:
-    description: 'secrets.RELEASE_KEYSTORE_ALIAS'
-    required: false
-  RELEASE_KEYSTORE_PASSWORD:
-    description: 'secrets.RELEASE_KEYSTORE_PASSWORD'
-    required: false
-  RELEASE_KEY_PASSWORD:
-    description: 'secrets.RELEASE_KEY_PASSWORD'
-    required: false
-outputs:
-  app_version:
-    description: 'Current version of the app'
-    value: ${{steps.current_version.outputs.version}}
 runs:
   using: 'composite'
   steps:
+    - name: Set BUILD_DIR
+      shell: bash
+      run: echo BUILD_DIR="app/build/outputs/apk/debug" >> "$GITHUB_ENV"
+
+    - name: Set APK_FILE location
+      shell: bash
+      run: echo "APK_FILE_DEBUG=${{ env.BUILD_DIR }}/${{ env.APP_NAME_DEBUG }}.apk" >> "$GITHUB_ENV"
+
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        cache: 'gradle'
-        java-version: 17
-
-    - name: Get Current Version
-      id: current_version
+    - name: Build debug apk
       shell: bash
       run: |
-        echo "version=$(./gradlew :app:properties | grep archivesBaseName | cut -d "_" -f 2)" >> $GITHUB_OUTPUT
+        ./gradlew assembleDebug --no-daemon || exit $?
+        mv ${{ env.BUILD_DIR }}/*.apk "${{ env.APK_FILE_DEBUG }}"
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-
-    - name: Download modified 33-34 SDK android.jar files
-      run: |
-        TARGET="$ANDROID_SDK_ROOT/platforms"
-        SOURCE='https://github.com/Reginer/aosp-android-jar/raw/main'
-        curl -Lo "$TARGET/android-33/android.jar" "$SOURCE/android-33/android.jar"
-        curl -Lo "$TARGET/android-34/android.jar" "$SOURCE/android-34/android.jar"
-      shell: bash
-
-    - name: Set APP_NAME
-      shell: bash
-      run: |
-
-        # Setup GITHUB_SHA
-        if [[ "$GITHUB_EVENT_NAME" = 'pull_request' ]]; then
-          GITHUB_SHA="${{ github.event.pull_request.head.sha }}" # Do not use last merge commit set in GITHUB_SHA
-        fi
-        GITHUB_SHA="${GITHUB_SHA:0:7}"
-
-        # App/apk name
-        APP_NAME="${{ github.event.repository.name }}-${GITHUB_SHA}"
-        echo APP_NAME="$APP_NAME" >> "$GITHUB_ENV"
-
-        APP_NAME_DEBUG="${{ github.event.repository.name }}-${GITHUB_SHA}-debug"
-        echo APP_NAME_DEBUG="$APP_NAME_DEBUG" >> "$GITHUB_ENV"
-
-    - name: Build Release
-      if: ${{ github.event_name == 'release'  }}
-      uses: ./.github/actions/build-release
-      with:
-        KEYSTORE_BASE_64: ${{ inputs.KEYSTORE_BASE_64 }}
-        RELEASE_KEYSTORE_ALIAS: ${{ inputs.RELEASE_KEYSTORE_ALIAS }}
-        RELEASE_KEYSTORE_PASSWORD: ${{ inputs.RELEASE_KEYSTORE_PASSWORD }}
-        RELEASE_KEY_PASSWORD: ${{ inputs.RELEASE_KEY_PASSWORD }}
-
-    - name: Upload Release Build to Artifacts
-      if: ${{ github.event_name == 'release'  }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.APP_NAME }}
-        path: ${{ env.APK_FILE }}
-
-    - name: Build Debug
-      uses: ./.github/actions/build-debug
-
-    - name: Upload Debug Build to Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.APP_NAME_DEBUG }}
-        path: ${{ env.APK_FILE_DEBUG }}
+    # - name: Build debug bundle
+    #   run: ./gradlew bundleDebug --no-daemon
